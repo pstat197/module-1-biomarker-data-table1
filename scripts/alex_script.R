@@ -9,7 +9,7 @@ load("team assignment_two/module-1-biomarker-data-table1/data/biomarker-clean.RD
 #Train/test split
 set.seed(123)
 n <- nrow(biomarker_clean)
-train_index <- sample(1:n, size = 0.8 * n)  
+train_index <- sample(1:n, size = 0.7 * n)  
 train_data <- biomarker_clean[train_index, ]
 test_data  <- biomarker_clean[-train_index, ]
 
