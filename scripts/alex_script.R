@@ -37,14 +37,28 @@ test_data  <- biomarker_clean[-train_index, ]
 
 protein_names <- setdiff(names(train_data), c("group", "ados"))
 
-t_results <- map_dfr(protein_names, function(p) {
+t_results_10 <- map_dfr(protein_names, function(p) {
   t <- t.test(train_data[[p]] ~ train_data$group)
   tibble(protein = p, p_value = t$p.value)
 }) %>%
   arrange(p_value)
 
-top_ttest <- t_results %>%
-  slice_head(n = 20) %>%
+top_ttest_10 <- t_results_10 %>%
+  slice_head(n = 10) %>%
+  pull(protein)
+
+cat("\nTop 10 proteins from t-test:\n")
+print(top_ttest_10)
+
+
+t_results_15 <- map_dfr(protein_names, function(p) {
+  t <- t.test(train_data[[p]] ~ train_data$group)
+  tibble(protein = p, p_value = t$p.value)
+}) %>%
+  arrange(p_value)
+
+top_ttest_15 <- t_results_15 %>%
+  slice_head(n = 15) %>%
   pull(protein)
 
 x_train <- train_data %>% select(-c(group, ados))
@@ -59,8 +73,12 @@ rf_importance$protein <- rownames(rf_importance)
 
 top_rf <- rf_importance %>%
   arrange(desc(MeanDecreaseGini)) %>%
-  slice_head(n = 20) %>%
+  slice_head(n = 15) %>%
   pull(protein)
+
+shared_hard <- intersect(top_ttest_15, top_rf)
+cat("Top 15 proteins from t-test:", length(shared_hard), "\n")
+print(shared_hard)
 
 fuzzy_shared <- unique(unlist(
   lapply(top_ttest, function(name1) {
@@ -87,9 +105,6 @@ fit <- glm(group ~ ., data = train_sub, family = "binomial")
 
 pred_probs <- predict(fit, newdata = test_sub, type = "response")
 pred_class <- ifelse(pred_probs > 0.5, 1, 0)
-
-confusion <- table(True = test_sub$group, Predicted = pred_class)
-print(confusion)
 
 accuracy <- mean(pred_class == test_sub$group)
 cat("Test accuracy:", round(accuracy, 3), "\n")
