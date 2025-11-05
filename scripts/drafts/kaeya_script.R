@@ -1,12 +1,47 @@
-library(tidyverse)
-library(infer)
-library(randomForest)
-library(tidymodels)
-library(modelr)
-library(yardstick)
+
+# ------------------ ## QUESTION 1 ## --------------- 
+
+#load raw data
+load('/Users/kaeya/PSTAT 197A/module-1-biomarker-data-table1/data/biomarker-clean.RData')
+rawbiodata <- read.csv('/Users/kaeya/PSTAT 197A/module-1-biomarker-data-table1/data/biomarker-raw.csv',
+                       header = TRUE, 
+                       skip = 1)
+
+# change headings
+rawbiodata <- subset(rawbiodata, select = -Target)
+view(rawbiodata)
+rawsampledata <- rawbiodata %>% sample_n(size = 50)
+view(rawsampledata)
+
+# label the different axes
+bio_long <- rawsampledata %>%
+  select(X, CEBPB, CHIP, NSE, PIAS4) %>%  
+  pivot_longer(cols = -X,
+               names_to = "Protein",
+               values_to = "Value")
+view(bio_long)
+
+# without log transformation
+ggplot(bio_long, aes(x = Value)) +
+  geom_histogram(bins = 30, fill = "gray", color = "white", na.rm = TRUE) +
+  facet_wrap(~Protein, scales = "free") +
+  theme_minimal() +
+  labs(title = "Distributions of protein levels before log transformation",
+       x = "# of Protiens")
+
+# with log transformation
+ggplot(bio_long, aes(x = log(Value))) +
+  geom_histogram(bins = 30, fill = "gray", color = "white", na.rm = TRUE) +
+  facet_wrap(~Protein, scales = "free") +
+  theme_minimal() +
+  labs(title = "Distributions of protein levels before log transformation",
+       x = "# of Protiens")
+
+
+# ------------------ ## QUESTION 2 ## ---------------
 
 # get names
-var_names <- read_csv('data/biomarker-raw.csv', 
+var_names <- read_csv('/Users/kaeya/PSTAT 197A/module-1-biomarker-data-table1/data/biomarker-raw.csv', 
                       col_names = F, 
                       n_max = 2, 
                       col_select = -(1:2)) %>%
@@ -16,14 +51,8 @@ var_names <- read_csv('data/biomarker-raw.csv',
          abbreviation = V2) %>%
   na.omit()
 
-# function for trimming outliers (good idea??)
-trim <- function(x, .at){
-  x[abs(x) > .at] <- sign(x[abs(x) > .at])*.at
-  return(x)
-}
-
-# read in data
-biomarker_clean <- read_csv('data/biomarker-raw.csv', 
+# clean & normalize data
+biomarker_clean <- read_csv('/Users/kaeya/PSTAT 197A/module-1-biomarker-data-table1/data/biomarker-raw.csv', 
                             skip = 2,
                             col_select = -2L,
                             col_names = c('group', 
@@ -34,35 +63,49 @@ biomarker_clean <- read_csv('data/biomarker-raw.csv',
   filter(!is.na(group)) %>%
   # log transform, center and scale, and trim
   mutate(across(.cols = -c(group, ados), 
-                ~ trim(scale(log10(.x))[, 1], .at = 3))) %>%
+                ~ as.numeric(scale(log10(.x))[, 1]))) %>%
   # reorder columns
   select(group, ados, everything())
 
-# export as r binary
-save(list = 'biomarker_clean', 
-     file = 'data/biomarker-clean.RData')
+# protein column names
+protein_cols <- pull(var_names, abbreviation)
+protein_cols
+
+# add sample ID (represents customers)
+bio_z <- biomarker_clean %>%
+  mutate(SampleID = row_number())
+
+# tabulate the outliers for each subject
+subject_outliers <- bio_z %>%
+  mutate(n_outliers = rowSums(across(all_of(protein_cols),
+                                     ~ is.finite(.x) & abs(.x) > 3))) %>%
+  select(SampleID, group, n_outliers)
+
+view(subject_outliers)
+
+# boxplot for ASD vs TD
+ggplot(subject_outliers, aes(x = group, y = n_outliers, fill = group)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Distribution of Outlier Counts (ASD vs TD)",
+       x = "Group",
+       y = "Number of Outlying Proteins (|z| > 3)") +
+  scale_fill_manual(values = c("ASD" = "gray", "TD" = "gray")) +
+  theme(legend.position = "none")
 
 
-load('data/biomarker-clean.RData')
+# ------------------ ## QUESTION 3A ## ---------------
 
-library(tidyverse)
-library(infer)
-library(randomForest)
-library(tidymodels)
-library(modelr)
-library(yardstick)
-load('data/biomarker-clean.RData')
+load('/Users/kaeya/PSTAT 197A/module-1-biomarker-data-table1/data/biomarker-clean.RData')
+biomarker_clean
 
-# Question 3 Part 1
 set.seed(123)
-biomarker_split <- biomarker_clean %>%
-  initial_split(prop = 0.7)
+n <- nrow(biomarker_clean)
+test.indices = sample(1:nrow(biomarker_clean), .3*n)
+biomarker.train=biomarker_clean[-test.indices,]
+biomarker.test=biomarker_clean[test.indices,]
 
-# Create training and testing sets
-train_data <- training(biomarker_split)
-test_data <- testing(biomarker_split)
-
-## MULTIPLE TESTING (using only training data)
+## MULTIPLE TESTING
 ####################
 
 # function to compute tests
@@ -74,7 +117,7 @@ test_fn <- function(.df){
          var.equal = F)
 }
 
-ttests_out <- train_data %>%
+ttests_out <- biomarker.train %>%
   # drop ADOS score
   select(-ados) %>%
   # arrange in long format
@@ -99,14 +142,16 @@ proteins_s1 <- ttests_out %>%
   slice_min(p.adj, n = 10) %>%
   pull(protein)
 
-## RANDOM FOREST (using only training data)
+proteins_s1
+
+## RANDOM FOREST
 ##################
 
-# store predictors and response separately from training data
-predictors <- train_data %>%
+# store predictors and response separately
+predictors <- biomarker.train %>%
   select(-c(group, ados))
 
-response <- train_data %>% pull(group) %>% factor()
+response <- biomarker.train %>% pull(group) %>% factor()
 
 # fit RF
 set.seed(101422)
@@ -115,7 +160,7 @@ rf_out <- randomForest(x = predictors,
                        ntree = 1000, 
                        importance = T)
 
-# check errors (on training data)
+# check errors
 rf_out$confusion
 
 # compute importance scores
@@ -125,56 +170,59 @@ proteins_s2 <- rf_out$importance %>%
   slice_max(MeanDecreaseGini, n = 10) %>%
   pull(protein)
 
+proteins_s2
+
 ## LOGISTIC REGRESSION
 #######################
 
 # select subset of interest
 proteins_sstar <- intersect(proteins_s1, proteins_s2)
 
-# Prepare training data for logistic regression
-train_sstar <- train_data %>%
+biomarker.train.transform <- biomarker.train %>%
   select(group, any_of(proteins_sstar)) %>%
   mutate(class = (group == 'ASD')) %>%
   select(-group)
 
-# Prepare test data with same proteins
-test_sstar <- test_data %>%
+biomarker.test.transform <- biomarker.test %>%
   select(group, any_of(proteins_sstar)) %>%
   mutate(class = (group == 'ASD')) %>%
   select(-group)
 
 # fit logistic regression model to training set
 fit <- glm(class ~ ., 
-           data = train_sstar, 
+           data = biomarker.train.transform, 
            family = 'binomial')
 
-# evaluate on the held-out test set (30%)
+fit
+
+# evaluate errors on test set
 class_metrics <- metric_set(sensitivity, 
                             specificity, 
                             accuracy,
                             roc_auc)
 
-# Create predictions for test set
-test_predictions <- test_sstar %>%
-  mutate(
-    pred_prob = predict(fit, newdata = ., type = "response"),
-    pred_class = factor(pred_prob > 0.5, levels = c(FALSE, TRUE), labels = c("TD", "ASD")),
-    truth = factor(class, levels = c(FALSE, TRUE), labels = c("TD", "ASD"))
-  )
+biomarker.test.transform %>%
+  add_predictions(fit, type = 'response') %>%
+  mutate(estimate = factor(pred > 0.5),
+         truth = factor(class)) %>% 
+  class_metrics(estimate = estimate,
+                truth = truth, pred,
+                event_level = 'second')
 
-# Calculate metrics
-test_results <- test_predictions %>%
-  class_metrics(
-    truth = truth,
-    estimate = pred_class,
-    pred_prob,
-    event_level = 'second'
-  )
-# Print test set results
-print("Model performance on test set (30%):")
-print(test_results)
+names(coef(fit)[-1])
 
-#Part 2 
+
+
+# ------------------ ## QUESTION 3B ## ---------------
+
+load('/Users/kaeya/PSTAT 197A/module-1-biomarker-data-table1/data/biomarker-clean.RData')
+biomarker_clean
+
+set.seed(123)
+n <- nrow(biomarker_clean)
+test.indices = sample(1:nrow(biomarker_clean), .2*n)
+biomarker.train=biomarker_clean[-test.indices,]
+biomarker.test=biomarker_clean[test.indices,]
 
 ## MULTIPLE TESTING
 ####################
@@ -188,7 +236,7 @@ test_fn <- function(.df){
          var.equal = F)
 }
 
-ttests_out <- biomarker_clean %>%
+ttests_out <- biomarker.train %>%
   # drop ADOS score
   select(-ados) %>%
   # arrange in long format
@@ -213,14 +261,16 @@ proteins_s1 <- ttests_out %>%
   slice_min(p.adj, n = 15) %>%
   pull(protein)
 
+proteins_s1
+
 ## RANDOM FOREST
 ##################
 
 # store predictors and response separately
-predictors <- biomarker_clean %>%
+predictors <- biomarker.train %>%
   select(-c(group, ados))
 
-response <- biomarker_clean %>% pull(group) %>% factor()
+response <- biomarker.train %>% pull(group) %>% factor()
 
 # fit RF
 set.seed(101422)
@@ -239,26 +289,32 @@ proteins_s2 <- rf_out$importance %>%
   slice_max(MeanDecreaseGini, n = 15) %>%
   pull(protein)
 
+proteins_s2
+
 ## LOGISTIC REGRESSION
 #######################
+
+set.seed(123)
 
 # select subset of interest
 proteins_sstar <- intersect(proteins_s1, proteins_s2)
 
-biomarker_sstar <- biomarker_clean %>%
+biomarker.train.transform <- biomarker.train %>%
   select(group, any_of(proteins_sstar)) %>%
   mutate(class = (group == 'ASD')) %>%
   select(-group)
 
-# partition into training and test set
-set.seed(123)
-biomarker_split <- biomarker_sstar %>%
-  initial_split(prop = 0.8)
+biomarker.test.transform <- biomarker.test %>%
+  select(group, any_of(proteins_sstar)) %>%
+  mutate(class = (group == 'ASD')) %>%
+  select(-group)
 
 # fit logistic regression model to training set
 fit <- glm(class ~ ., 
-           data = training(biomarker_split), 
+           data = biomarker.train.transform, 
            family = 'binomial')
+
+fit
 
 # evaluate errors on test set
 class_metrics <- metric_set(sensitivity, 
@@ -266,10 +322,39 @@ class_metrics <- metric_set(sensitivity,
                             accuracy,
                             roc_auc)
 
-testing(biomarker_split) %>%
+biomarker.test.transform %>%
   add_predictions(fit, type = 'response') %>%
   mutate(estimate = factor(pred > 0.5),
          truth = factor(class)) %>% 
   class_metrics(estimate = estimate,
                 truth = truth, pred,
                 event_level = 'second')
+
+finalprotiens <- names(coef(fit)[-1])
+finalprotiens
+
+
+
+
+
+in_two_of_three <- function(a, b, c) {
+  # Combine all elements
+  all_elements <- c(a, b, c)
+
+  # Count how many times each unique element appears
+  counts <- table(all_elements)
+  
+  # Return elements that appear exactly twice
+  names(counts[counts >= 2])
+}
+
+in_two_of_three(proteins_s1, proteins_s2, proteins_s3)
+
+
+
+
+
+
+
+
+
