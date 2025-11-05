@@ -98,13 +98,15 @@ shared_hard <- intersect(top_ttest_15, top_rf)
 cat("Top 15 proteins from t-test:", length(shared_hard), "\n")
 print(shared_hard)
 
-fuzzy_shared <- unique(unlist(
-  lapply(top_ttest, function(name1) {
-    matches <- agrep(name1, top_rf, max.distance = 0.1, ignore.case = TRUE)
-    if (length(matches) > 0) return(name1)
-    else return(NULL)
-  })
-))
+fuzzy_shared <- c()
+
+for (p in top_ttest_15) {
+  if (length(agrep(p, top_rf, ignore.case = TRUE, max.distance = 0.1)) > 0) {
+    fuzzy_shared <- c(fuzzy_shared, p)
+  }
+}
+
+fuzzy_shared <- unique(fuzzy_shared)
 
 cat("Number of fuzzy-matched shared proteins:", length(fuzzy_shared), "\n")
 print(fuzzy_shared)
