@@ -44,7 +44,14 @@ save(list = 'biomarker_clean',
 
 
 load('data/biomarker-clean.RData')
-biomarker_clean
+
+library(tidyverse)
+library(infer)
+library(randomForest)
+library(tidymodels)
+library(modelr)
+library(yardstick)
+load('data/biomarker-clean.RData')
 
 # Question 3 Part 1
 set.seed(123)
@@ -91,7 +98,7 @@ ttests_out <- train_data %>%
 proteins_s1 <- ttests_out %>%
   slice_min(p.adj, n = 10) %>%
   pull(protein)
-proteins_s1
+
 ## RANDOM FOREST (using only training data)
 ##################
 
@@ -117,13 +124,11 @@ proteins_s2 <- rf_out$importance %>%
   mutate(protein = rownames(rf_out$importance)) %>%
   slice_max(MeanDecreaseGini, n = 10) %>%
   pull(protein)
-proteins_s2
 
 ## LOGISTIC REGRESSION
 #######################
 
 # select subset of interest
-set.seed(123)
 proteins_sstar <- intersect(proteins_s1, proteins_s2)
 
 # Prepare training data for logistic regression
@@ -142,7 +147,6 @@ test_sstar <- test_data %>%
 fit <- glm(class ~ ., 
            data = train_sstar, 
            family = 'binomial')
-fit
 
 # evaluate on the held-out test set (30%)
 class_metrics <- metric_set(sensitivity, 
@@ -167,21 +171,12 @@ test_results <- test_predictions %>%
     event_level = 'second'
   )
 # Print test set results
+print("Model performance on test set (30%):")
 print(test_results)
-final <- names(coef(fit)[-1])
-final
-
 
 #Part 2 
-set.seed(123)
-biomarker_split <- biomarker_clean %>%
-  initial_split(prop = 0.7)
 
-# Create training and testing sets
-train_data <- training(biomarker_split)
-test_data <- testing(biomarker_split)
-
-## MULTIPLE TESTING (using only training data)
+## MULTIPLE TESTING
 ####################
 
 # function to compute tests
@@ -193,7 +188,7 @@ test_fn <- function(.df){
          var.equal = F)
 }
 
-ttests_out <- train_data %>%
+ttests_out <- biomarker_clean %>%
   # drop ADOS score
   select(-ados) %>%
   # arrange in long format
@@ -217,15 +212,15 @@ ttests_out <- train_data %>%
 proteins_s1 <- ttests_out %>%
   slice_min(p.adj, n = 15) %>%
   pull(protein)
-proteins_s1
-## RANDOM FOREST (using only training data)
+
+## RANDOM FOREST
 ##################
 
-# store predictors and response separately from training data
-predictors <- train_data %>%
+# store predictors and response separately
+predictors <- biomarker_clean %>%
   select(-c(group, ados))
 
-response <- train_data %>% pull(group) %>% factor()
+response <- biomarker_clean %>% pull(group) %>% factor()
 
 # fit RF
 set.seed(101422)
@@ -234,7 +229,7 @@ rf_out <- randomForest(x = predictors,
                        ntree = 1000, 
                        importance = T)
 
-# check errors (on training data)
+# check errors
 rf_out$confusion
 
 # compute importance scores
@@ -243,58 +238,38 @@ proteins_s2 <- rf_out$importance %>%
   mutate(protein = rownames(rf_out$importance)) %>%
   slice_max(MeanDecreaseGini, n = 15) %>%
   pull(protein)
-proteins_s2
 
 ## LOGISTIC REGRESSION
 #######################
 
 # select subset of interest
-set.seed(123)
 proteins_sstar <- intersect(proteins_s1, proteins_s2)
 
-# Prepare training data for logistic regression
-train_sstar <- train_data %>%
+biomarker_sstar <- biomarker_clean %>%
   select(group, any_of(proteins_sstar)) %>%
   mutate(class = (group == 'ASD')) %>%
   select(-group)
 
-# Prepare test data with same proteins
-test_sstar <- test_data %>%
-  select(group, any_of(proteins_sstar)) %>%
-  mutate(class = (group == 'ASD')) %>%
-  select(-group)
+# partition into training and test set
+set.seed(123)
+biomarker_split <- biomarker_sstar %>%
+  initial_split(prop = 0.8)
 
 # fit logistic regression model to training set
 fit <- glm(class ~ ., 
-           data = train_sstar, 
+           data = training(biomarker_split), 
            family = 'binomial')
-fit
 
-# evaluate on the held-out test set (30%)
+# evaluate errors on test set
 class_metrics <- metric_set(sensitivity, 
                             specificity, 
                             accuracy,
                             roc_auc)
 
-# Create predictions for test set
-test_predictions <- test_sstar %>%
-  mutate(
-    pred_prob = predict(fit, newdata = ., type = "response"),
-    pred_class = factor(pred_prob > 0.5, levels = c(FALSE, TRUE), labels = c("TD", "ASD")),
-    truth = factor(class, levels = c(FALSE, TRUE), labels = c("TD", "ASD"))
-  )
-
-# Calculate metrics
-test_results <- test_predictions %>%
-  class_metrics(
-    truth = truth,
-    estimate = pred_class,
-    pred_prob,
-    event_level = 'second'
-  )
-# Print test set results
-print(test_results)
-final <- names(coef(fit)[-1])
-final
-
-
+testing(biomarker_split) %>%
+  add_predictions(fit, type = 'response') %>%
+  mutate(estimate = factor(pred > 0.5),
+         truth = factor(class)) %>% 
+  class_metrics(estimate = estimate,
+                truth = truth, pred,
+                event_level = 'second')
