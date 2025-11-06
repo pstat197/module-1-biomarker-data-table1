@@ -1,0 +1,21 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+```{mermaid}
+flowchart TD
+    A[Raw serum proteomics] --> B[Preprocess: log10, scale, trim]
+    B --> C[Split 70/30 train vs test]
+    C --> D1[T-tests on train\nTop k = 10 or 15]
+    C --> D2[Random Forest on train\nTop k = 15]
+    D1 --> E1[Hard intersection]
+    D1 --> E2[Fuzzy intersection]
+    D2 --> E1
+    D2 --> E2
+    E1 --> F1[Logistic regression\nevaluate on test]
+    E2 --> F2[Logistic regression\nevaluate on test]
+    F1 --> G1[Report: sens, spec, acc, AUC]
+    F2 --> G2[Report: sens, spec, acc, AUC]
+```
