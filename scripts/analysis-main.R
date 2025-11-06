@@ -1,9 +1,15 @@
+library(tidyverse)
+library(infer)
+library(randomForest)
+library(tidymodels)
+library(modelr)
+library(yardstick)
 
 # ------------------ ## QUESTION 1 ## --------------- 
 
 #load raw data
-load('/data/biomarker-clean.RData')
-rawbiodata <- read.csv('/data/biomarker-raw.csv',
+load('./data/biomarker-clean.RData')
+rawbiodata <- read.csv('./data/biomarker-raw.csv',
                        header = TRUE, 
                        skip = 1)
 
@@ -41,7 +47,7 @@ ggplot(bio_long, aes(x = log(Value))) +
 # ------------------ ## QUESTION 2 ## ---------------
 
 # get names
-var_names <- read_csv('/data/biomarker-raw.csv', 
+var_names <- read_csv('./data/biomarker-raw.csv', 
                       col_names = F, 
                       n_max = 2, 
                       col_select = -(1:2)) %>%
@@ -52,7 +58,7 @@ var_names <- read_csv('/data/biomarker-raw.csv',
   na.omit()
 
 # clean & normalize data
-biomarker_clean <- read_csv('/data/biomarker-raw.csv', 
+biomarker_clean <- read_csv('./data/biomarker-raw.csv', 
                             skip = 2,
                             col_select = -2L,
                             col_names = c('group', 
@@ -99,7 +105,7 @@ ggplot(subject_outliers, aes(x = group, y = n_outliers, fill = group)) +
 
 # ------------------ ## QUESTION 3A ## ---------------
 
-load('/data/biomarker-clean.RData')
+
 biomarker_clean
 
 set.seed(123)
@@ -218,8 +224,6 @@ finalpanel1 <- names(coef(fit)[-1])
 
 # ------------------ ## QUESTION 3B ## ---------------
 
-load('/data/biomarker-clean.RData')
-biomarker_clean
 
 set.seed(123)
 n <- nrow(biomarker_clean)
@@ -336,9 +340,6 @@ finalpanel2 <- names(coef(fit)[-1])
 
 
 # ------------------ ## QUESTION 3C ## ---------------
-
-load('/data/biomarker-clean.RData')
-biomarker_clean
 
 set.seed(123)
 biomarker_split <- biomarker_clean %>%
@@ -458,13 +459,7 @@ finalpanel3
 
 # ----------------------- ## QUESTION 4 ## ------------------ 
 
-library(tidyverse)
-library(infer)
-library(randomForest)
-library(tidymodels)
-library(modelr)
-library(yardstick)
-load('data/biomarker-clean.RData')
+
 ## MULTIPLE TESTING
 ####################
 
@@ -532,7 +527,7 @@ proteins_s2 <- rf_out$importance %>%
 #######################
 
 # select subset of interest
-proteins_sstar <- intersection(proteins_s1, proteins_s2)
+proteins_sstar <- intersect(proteins_s1, proteins_s2)
 
 biomarker_sstar <- biomarker_clean %>%
   select(group, any_of(proteins_sstar)) %>%
@@ -553,8 +548,8 @@ summary(fit)
 
 # keep only proteins with low p values
 fit2 <- glm(class ~ -1 + DERM + RELT + IgD, 
-           data = training(biomarker_split), 
-           family = 'binomial')
+            data = training(biomarker_split), 
+            family = 'binomial')
 summary(fit2)
 
 # compare fit vs. fit2 performance
