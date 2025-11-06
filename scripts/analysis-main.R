@@ -40,7 +40,7 @@ ggplot(bio_long, aes(x = log(Value))) +
   geom_histogram(bins = 30, fill = "gray", color = "white", na.rm = TRUE) +
   facet_wrap(~Protein, scales = "free") +
   theme_minimal() +
-  labs(title = "Distributions of protein levels before log transformation",
+  labs(title = "Distributions of protein levels after log transformation",
        x = "# of Protiens")
 
 
