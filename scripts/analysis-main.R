@@ -83,6 +83,9 @@ subject_outliers <- bio_z %>%
 
 view(subject_outliers)
 
+mean(subject_outliers$n_outliers)
+median(subject_outliers$n_outliers)
+
 # boxplot for ASD vs TD
 ggplot(subject_outliers, aes(x = group, y = n_outliers, fill = group)) +
   geom_boxplot() +
