@@ -23,11 +23,11 @@ library(yardstick)
 library(modelr)
 library(tidymodels)
 
-# rawbiodata <- read.csv('/data/biomarker-raw.csv',
-                       #header = TRUE, 
-                       #skip = 1)
+rawbiodata <- read.csv('../data/biomarker-raw.csv',
+                       header = TRUE, 
+                       skip = 1)
 
-#load('/data/biomarker-clean.RData')
+load('../data/biomarker-clean.RData')
 ```
 
 ## Abstract
