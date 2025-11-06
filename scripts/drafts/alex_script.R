@@ -50,6 +50,24 @@ top_ttest_10 <- t_results_10 %>%
 cat("\nTop 10 proteins from t-test:\n")
 print(top_ttest_10)
 
+shared_proteins_10 <- top_ttest_10
+
+train_sub_10 <- train_data %>%
+  select(group, all_of(shared_proteins_10)) %>%
+  mutate(group = ifelse(group == "ASD", 1, 0))
+
+test_sub_10 <- test_data %>%
+  select(group, all_of(shared_proteins_10)) %>%
+  mutate(group = ifelse(group == "ASD", 1, 0))
+
+fit_10 <- glm(group ~ ., data = train_sub_10, family = "binomial")
+
+pred_probs_10 <- predict(fit_10, newdata = test_sub_10, type = "response")
+pred_class_10 <- ifelse(pred_probs_10 > 0.5, 1, 0)
+
+accuracy_10 <- mean(pred_class_10 == test_sub_10$group)
+cat("\nTest accuracy using top 10 t-test proteins:", round(accuracy_10, 3), "\n")
+
 
 t_results_15 <- map_dfr(protein_names, function(p) {
   t <- t.test(train_data[[p]] ~ train_data$group)
@@ -80,13 +98,15 @@ shared_hard <- intersect(top_ttest_15, top_rf)
 cat("Top 15 proteins from t-test:", length(shared_hard), "\n")
 print(shared_hard)
 
-fuzzy_shared <- unique(unlist(
-  lapply(top_ttest, function(name1) {
-    matches <- agrep(name1, top_rf, max.distance = 0.1, ignore.case = TRUE)
-    if (length(matches) > 0) return(name1)
-    else return(NULL)
-  })
-))
+fuzzy_shared <- c()
+
+for (p in top_ttest_15) {
+  if (length(agrep(p, top_rf, ignore.case = TRUE, max.distance = 0.1)) > 0) {
+    fuzzy_shared <- c(fuzzy_shared, p)
+  }
+}
+
+fuzzy_shared <- unique(fuzzy_shared)
 
 cat("Number of fuzzy-matched shared proteins:", length(fuzzy_shared), "\n")
 print(fuzzy_shared)
@@ -107,4 +127,4 @@ pred_probs <- predict(fit, newdata = test_sub, type = "response")
 pred_class <- ifelse(pred_probs > 0.5, 1, 0)
 
 accuracy <- mean(pred_class == test_sub$group)
-cat("Test accuracy:", round(accuracy, 3), "\n")
+cat("Test accuracy for n = 15:", round(accuracy, 3), "\n")
