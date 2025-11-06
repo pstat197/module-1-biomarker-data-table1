@@ -42,6 +42,12 @@ In order to quantify protein abundance in the blood samples, a proteomic analysi
 
 ## Summary of published analysis
 
+In the study by Hewitson et al. (2021), the goal was to find proteins in the blood that could help detect autism spectrum disorder (ASD) in young boys. The researchers collected blood samples from 76 boys with ASD and 78 boys without ASD, then measured over 1,100 proteins using a tool called the SomaLogic SOMAScan™ platform. Before analyzing the data, they cleaned it by log-transforming the protein values, normalizing them, and trimming extreme outliers to make the results more reliable.
+
+To figure out which proteins were most important, they used three main methods. First, a t-test to see which proteins had significant differences between the two groups, then a random forest model to see which proteins were best at predicting group membership, and finally a correlation test to check which proteins were linked to ASD severity. Each method produced a list of the top ten proteins, and they compared the lists to find proteins that appeared across multiple methods.
+
+They found five proteins that showed up in all three methods and called them the “core” proteins. After testing a few more, they built a final nine-protein panel and used it in a logistic regression model to predict ASD. The model performed well, with an AUC of about 0.86, sensitivity of 0.83, and specificity of 0.84, meaning it correctly identified most of the ASD and non-ASD cases.
+
 ![](images/flowchart.png){width="345"}
 
 ## Findings
