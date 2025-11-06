@@ -54,9 +54,7 @@ Before the log transformation, the distributions were right skewed, which means 
 
 ![](images/q1nottransformed.png){width="511"}
 
-![](images/q1nottransformed.png){width="511"}
-
-![](images/q1transformed.png){width="507"}
+![](images/q1transformed.png){width="501"}
 
 Second we analyzed the outliers in the dataset. Outliers were identified by protein measurements having an absolute z-score greater than three, representing values more than three standard deviations away from the mean. We identified the outliers per subject by tabulating the number of protein outliers for each individual. Some subjects had quite high numbers of outliers (up to 157), while the mean number of outliers per subject was 15.45 and the median was 8.5. This indicates that while most subjects had a small number of outliers, a few had very high counts.
 
