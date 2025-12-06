@@ -1,4 +1,7 @@
 library(tidyverse)
+
+# Question 01: Why log?
+
 # read in the raw data 
 raw_data <- read_csv('data/biomarker-raw.csv', 
                      col_names = F, 
@@ -51,3 +54,33 @@ log_data <- raw_data %>%
 log_data
 # output data is a lot more symmetric/normal and less 
 ## extreme, proving why log transformation is useful here
+
+# Question 02: Why trim?
+
+# load row names (protein names + abbs)
+var_names <- read_csv(
+  'data/biomarker-raw.csv',
+  col_names = FALSE,
+  n_max = 2, # read only first two rows
+  col_select = -(1:2) # remove non-numeric
+) %>% 
+  t() %>% # transpose so each protein is a row
+  as_tibble() %>% 
+  rename(name = V1, abbreviation = V2) %>% 
+  na.omit()
+
+# read in numeric protein data
+raw <- read_csv(
+  'data/biomarker-raw.csv', 
+  skip = 2, # only want numbers
+  col_select = -2L, # empty column
+  col_names = c(
+    'group',
+    'empty',
+    var_names$abbreviation, 
+    'ados'
+  ),
+  na = c('-', '')
+) %>% 
+  filter(!is.na(group)) %>% # remove rows without valid group
+  select(-empty) # remove empty column
