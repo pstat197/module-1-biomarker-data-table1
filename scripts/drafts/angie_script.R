@@ -57,30 +57,100 @@ log_data
 
 # Question 02: Why trim?
 
-# load row names (protein names + abbs)
-var_names <- read_csv(
-  'data/biomarker-raw.csv',
-  col_names = FALSE,
-  n_max = 2, # read only first two rows
-  col_select = -(1:2) # remove non-numeric
-) %>% 
-  t() %>% # transpose so each protein is a row
-  as_tibble() %>% 
-  rename(name = V1, abbreviation = V2) %>% 
-  na.omit()
-
 # read in numeric protein data
-raw <- read_csv(
-  'data/biomarker-raw.csv', 
-  skip = 2, # only want numbers
-  col_select = -2L, # empty column
-  col_names = c(
-    'group',
-    'empty',
-    var_names$abbreviation, 
-    'ados'
-  ),
-  na = c('-', '')
-) %>% 
-  filter(!is.na(group)) %>% # remove rows without valid group
-  select(-empty) # remove empty column
+raw_numeric <- read_csv(
+  "data/biomarker-raw.csv",
+  skip = 1,# skip the name row
+  na = c("-", "")
+)
+
+names(raw_numeric)[1:5]
+tail(names(raw_numeric))
+
+biomarker_raw <- raw_numeric %>% 
+  rename(
+    group = '...1',
+    ados = '...1320'
+  ) %>% 
+  select(-Target) %>% # drops empty target column
+  filter(!is.na(group))
+
+dim(biomarker_raw)
+head(biomarker_raw[, 1:6])
+# want z-scores with values w mean 0, sd 1
+
+biomarker_z <- biomarker_raw %>% 
+  mutate(across(
+    .cols = -c(group, ados), 
+    .fns = ~ scale(log10(.x))[,1] # log10 and standardize
+  ))
+
+# log transform reduces how skewed raw data is 
+# scale converts each protein to z-scores
+# basically preprocessing script before trim()
+
+# flag outliers
+outlier_counts <- biomarker_z %>% 
+  mutate(across(
+    .cols = -c(group, ados),
+    .fns = ~ abs(.x) > 3 # true if val is outlier
+  )) %>% 
+  mutate(
+    n_outliers = rowSums(across(-c(group, ados)))
+  ) %>% select(group, ados, n_outliers)
+
+# rowwise counting because we want to know which subjects
+# have extreme values and whether that differs between groups
+
+# if most subjects have just a few outliers but a few have
+## over 100, those subjects may be important and change the models
+
+summary(outlier_counts$n_outliers)
+
+outlier_counts %>% 
+  ggplot(aes(x = n_outliers)) +
+  geom_histogram(bins = 30) +
+  labs(
+    title = 'number of outlier protein values per subject (|z| > 3)',
+    x = 'number of outlying protein values',
+    y = 'number of subjects'
+  )
+
+# compare asd vs td
+group_outliers <- outlier_counts %>%
+  group_by(group) %>%
+  summarise(
+    mean_outliers   = mean(n_outliers),
+    median_outliers = median(n_outliers),
+    max_outliers    = max(n_outliers),
+    .groups = "drop"
+  )
+
+group_outliers
+
+top_outlier_subjects <- outlier_counts %>% 
+  arrange(desc(n_outliers)) %>% 
+  slice(1:10)
+
+top_outlier_subjects
+
+# removing the trimming step and examining the outliers defined as |z| > 3 after 
+# log transformation and standardization, i found that most subjects had 
+# relatively few protein outliers. however, a small subset of subjects showed 
+# extremely large numbers of outliers across many different proteins. 
+# specifically, they are outliers at the subject level and not just individual
+# protein-levels. 
+
+# the comparison shows that ASD subjects have 13.2 mean outliers and 126 
+# maximum outliers. the TD subjects have 17.6 mean outliers and 
+# maximum 157.
+
+# both groups include subjects with very high outlier counts, but TD subjects 
+# show a slightly higher mean and maximum number of outliers in the 
+# untrimmed dataset.
+
+# overall, after removing trimming, it seems that although most subjects had
+# few outliers, a small number had over 120-150 extreme values across proteins.
+# these were mostly TD participants and were clear subject-level outlines because
+# such cases will disproportionately affect variable selection and classification
+# so trimming is essential to stabilize
